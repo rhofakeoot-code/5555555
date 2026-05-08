@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لوحة إدارة تفاحة</title>
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div id="login-overlay" class="login-overlay">
+        <div class="login-box glass-panel">
+            <i class="fa-solid fa-apple-whole fa-bounce login-logo-icon"></i>
+            <h2>متجر تفاحة</h2>
+            <p>يرجى إدخال رمز التحقق للدخول</p>
+            <div class="input-3d-wrap">
+                <i class="fa-solid fa-lock"></i>
+                <input type="password" id="admin-pass" placeholder="رمز الدخول" class="input-3d">
+            </div>
+            <button class="btn-3d" onclick="verifyAdmin()">دخول <i class="fa-solid fa-right-to-bracket"></i></button>
+        </div>
+    </div>
+
+    <div id="app-content" style="display: none;" class="admin-container">
+        
+        <main class="main-content glass-panel">
+            
+            <section id="orders" class="tab-content active">
+                <h2><i class="fa-solid fa-box-open"></i> الطلبات الجديدة</h2>
+                <div id="orders-list" class="grid-list"></div>
+            </section>
+            
+            <section id="accepted-orders" class="tab-content">
+                <h2><i class="fa-solid fa-check-double"></i> الطلبات المقبولة</h2>
+                <div id="accepted-orders-list" class="grid-list"></div>
+            </section>
+
+            <section id="sales" class="tab-content">
+                <h2><i class="fa-solid fa-chart-line"></i> المبيعات</h2>
+                <div class="form-glass" style="text-align: center; margin-bottom: 20px;">
+                    <button class="btn-3d" style="background: #ff3e3e;" onclick="resetSales()">تصفير المبيعات <i class="fa-solid fa-trash"></i></button>
+                </div>
+                <div id="sales-list" class="grid-list"></div>
+            </section>
+
+            <section id="products" class="tab-content">
+                <h2><i class="fa-solid fa-tags"></i> إدارة المنتجات</h2>
+                <div class="form-glass">
+                    <input type="hidden" id="prod-id">
+                    <div class="input-3d">
+                        <label>رفع صور المنتج (يمكنك تحديد عدة صور معاً)</label>
+                        <input type="file" id="prod-images" accept="image/*" multiple>
+                    </div>
+                    <input type="text" id="prod-name" placeholder="اسم المنتج" class="input-3d">
+                    <select id="prod-cat" class="input-3d"><option value="">اختر القسم</option></select>
+                    <textarea id="prod-desc" placeholder="وصف المنتج" class="input-3d"></textarea>
+                    <input type="number" id="prod-price" placeholder="السعر" class="input-3d">
+                    <button class="btn-3d" id="btn-save-prod" onclick="saveProduct()">حفظ المنتج <i class="fa-solid fa-save"></i></button>
+                </div>
+                <h3 style="margin-top:20px;">المنتجات المضافة</h3>
+                <div id="products-list" class="grid-list"></div>
+            </section>
+
+            <section id="offers" class="tab-content">
+                <h2><i class="fa-solid fa-bullhorn"></i> إدارة بنرات العروض</h2>
+                <div class="form-glass">
+                    <div class="input-3d">
+                        <label>رفع صورة العروض</label>
+                        <input type="file" id="offer-img" accept="image/*" multiple>
+                    </div>
+                    <button class="btn-3d" id="btn-save-offer" onclick="saveOffer()">حفظ العرض <i class="fa-solid fa-save"></i></button>
+                </div>
+                <h3 style="margin-top:20px;">العروض المضافة</h3>
+                <div id="offers-list" class="grid-list"></div>
+            </section>
+
+            <section id="discount-offers" class="tab-content">
+                <h2><i class="fa-solid fa-percent"></i> العروض والخصومات</h2>
+                <div class="form-glass">
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="number" id="discount-percent" placeholder="نسبة الخصم %" class="input-3d" style="width: 50%;">
+                        <button class="btn-3d" style="width: 50%;" onclick="applyDiscountToSelected()">حفظ <i class="fa-solid fa-check"></i></button>
+                    </div>
+                    <h3 style="margin-top: 15px; color: #333;">اختر المنتجات لتطبيق الخصم:</h3>
+                    <div id="discount-products-select-list" class="grid-list" style="max-height: 300px; overflow-y: auto;"></div>
+                </div>
+
+                <h3 style="margin-top:30px;">الخصومات المتاحة</h3>
+                <div id="discounted-products-list" class="grid-list"></div>
+            </section>
+
+            <section id="categories" class="tab-content">
+                <h2><i class="fa-solid fa-layer-group"></i> إنشاء قسم</h2>
+                <div class="form-glass">
+                    <input type="hidden" id="cat-id">
+                    <div class="input-3d">
+                        <label>رفع صورة مربعة</label>
+                        <input type="file" id="cat-img" accept="image/*">
+                    </div>
+                    <input type="text" id="cat-name" placeholder="اسم القسم" class="input-3d">
+                    <button class="btn-3d" id="btn-save-cat" onclick="saveCategory()">حفظ القسم <i class="fa-solid fa-save"></i></button>
+                </div>
+                <h3 style="margin-top:20px;">الأقسام المضافة</h3>
+                <div id="categories-list" class="grid-list"></div>
+            </section>
+
+            <section id="banners" class="tab-content">
+                <h2><i class="fa-solid fa-images"></i> إدارة البنر</h2>
+                <div class="form-glass">
+                    <div class="input-3d">
+                        <label>رفع صورة البنر</label>
+                        <input type="file" id="banner-img" accept="image/*" multiple>
+                    </div>
+                    <button class="btn-3d" id="btn-save-banner" onclick="saveBanner()">حفظ البنر <i class="fa-solid fa-save"></i></button>
+                </div>
+                <h3 style="margin-top:20px;">البنرات المضافة</h3>
+                <div id="banners-list" class="grid-list"></div>
+            </section>
+
+        </main>
+
+        <nav class="sidebar glass-panel">
+            <div class="nav-item active" onclick="switchTab('orders')"><i class="fa-solid fa-box-open"></i> الطلبات</div>
+            <div class="nav-item" onclick="switchTab('accepted-orders')"><i class="fa-solid fa-check-double"></i> المقبولة</div>
+            <div class="nav-item" onclick="switchTab('sales')"><i class="fa-solid fa-chart-line"></i> المبيعات</div>
+            <div class="nav-item" onclick="switchTab('products')"><i class="fa-solid fa-tags"></i> منتج</div>
+            <div class="nav-item" onclick="switchTab('offers')"><i class="fa-solid fa-bullhorn"></i> بنرات</div>
+            <div class="nav-item" onclick="switchTab('discount-offers')"><i class="fa-solid fa-percent"></i> العروض</div>
+            <div class="nav-item" onclick="switchTab('categories')"><i class="fa-solid fa-layer-group"></i> قسم</div>
+            <div class="nav-item" onclick="switchTab('banners')"><i class="fa-solid fa-images"></i> البنر</div>
+        </nav>
+    </div>
+
+    <script type="module" src="script.js"></script>
+</body>
+</html>

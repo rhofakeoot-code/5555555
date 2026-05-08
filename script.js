@@ -43,8 +43,8 @@ window.showCustomAlert = (message) => {
     }, 3000);
 };
 
-// دالة تقليص الصورة بجودة عالية للرفع
-async function compressAndEncodeImage(file) {
+// دالة تقليص الصور (مرنة للتحكم بالحجم والجودة)
+async function compressAndEncodeImage(file, maxWidth = 800, quality = 0.7) {
     if (!file) return null;
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -54,14 +54,13 @@ async function compressAndEncodeImage(file) {
             img.src = event.target.result;
             img.onload = () => {
                 const canvas = document.createElement('canvas');
-                const MAX_WIDTH = 1000; 
                 let scaleSize = 1;
-                if (img.width > MAX_WIDTH) scaleSize = MAX_WIDTH / img.width;
+                if (img.width > maxWidth) scaleSize = maxWidth / img.width;
                 canvas.width = img.width * scaleSize;
                 canvas.height = img.height * scaleSize;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+                const dataUrl = canvas.toDataURL('image/jpeg', quality);
                 resolve(dataUrl);
             };
         };
@@ -118,21 +117,19 @@ window.switchTab = (tabId) => {
     if(tabId === 'sales') loadSales();
 };
 
-// حفظ الأقسام باستخدام ImgBB
+// حفظ الأقسام بالنظام القديم (Base64) لضمان عملها بالمتجر
 window.saveCategory = async () => {
     const id = document.getElementById('cat-id').value;
     const name = document.getElementById('cat-name').value;
     const file = document.getElementById('cat-img').files[0];
     if (!name) return showCustomAlert('أدخل اسم القسم');
     const btn = document.getElementById('btn-save-cat');
-    btn.innerText = 'جاري الرفع...';
+    btn.innerText = 'جاري المعالجة...';
 
     try {
         let updateData = { name };
         if (file) {
-            const base64 = await compressAndEncodeImage(file);
-            const url = await uploadToImgBB(base64);
-            if (url) updateData.image = url;
+            updateData.image = await compressAndEncodeImage(file, 600, 0.7);
         }
         if (id) await updateDoc(doc(db, "categories", id), updateData);
         else {
@@ -141,6 +138,9 @@ window.saveCategory = async () => {
         }
         showCustomAlert('تم حفظ القسم');
         switchTab('categories');
+        document.getElementById('cat-id').value = '';
+        document.getElementById('cat-name').value = '';
+        document.getElementById('cat-img').value = '';
     } catch (e) { showCustomAlert(e.message); }
     btn.innerHTML = 'حفظ القسم <i class="fa-solid fa-save"></i>';
 };
@@ -152,7 +152,7 @@ window.loadCategories = async () => {
     list.innerHTML = '';
     snapshot.forEach(docSnap => {
         const data = docSnap.data();
-        list.innerHTML += `<div class="card-3d"><img src="${data.image}"><div class="card-title">${data.name}</div><button class="btn-action edit" onclick="editCategory('${docSnap.id}', '${data.name}')">تعديل</button><button class="btn-action delete" onclick="deleteDocItem('categories', '${docSnap.id}', null, loadCategories)">حذف</button></div>`;
+        list.innerHTML += `<div class="card-3d"><img src="${data.image || ''}"><div class="card-title">${data.name}</div><button class="btn-action edit" onclick="editCategory('${docSnap.id}', '${data.name}')">تعديل</button><button class="btn-action delete" onclick="deleteDocItem('categories', '${docSnap.id}', null, loadCategories)">حذف</button></div>`;
     });
 };
 
@@ -169,7 +169,7 @@ window.loadCategoriesForSelect = async () => {
     snapshot.forEach(docSnap => { select.innerHTML += `<option value="${docSnap.data().name}">${docSnap.data().name}</option>`; });
 };
 
-// حفظ المنتج المتوافق تماماً مع المتجر (image1, image2)
+// حفظ المنتج (النظام الهجين الذكي: Base64 للرئيسية + ImgBB للتفاصيل)
 window.saveProduct = async () => {
     const id = document.getElementById('prod-id').value;
     const name = document.getElementById('prod-name').value;
@@ -180,22 +180,27 @@ window.saveProduct = async () => {
 
     if (!name || !price) return showCustomAlert('أكمل البيانات');
     const btn = document.getElementById('btn-save-prod');
-    btn.innerText = 'جاري الرفع للمتجر...';
+    btn.innerText = 'جاري الرفع والمعالجة...';
 
     try {
         let updateData = { name, category: cat, desc, price: Number(price) };
         
         if (files.length > 0) {
-            // رفع أول صورتين فقط كما يتطلب المتجر
+            // 1. الصورة المصغرة لواجهة التطبيق الرئيسية (نص طويل بحجم خفيف جداً لتجنب الأبيض)
+            const thumbnailBase64 = await compressAndEncodeImage(files[0], 400, 0.5);
+            updateData.images = [{ id: 'img_' + Date.now(), data: thumbnailBase64 }];
+            updateData.image = thumbnailBase64; // احتياطي
+            
+            // 2. صور التفاصيل عالية الدقة مرفوعة على ImgBB
             if (files[0]) {
-                const b1 = await compressAndEncodeImage(files[0]);
-                const u1 = await uploadToImgBB(b1);
-                if (u1) updateData.image1 = u1;
+                const hq1 = await compressAndEncodeImage(files[0], 1000, 0.8);
+                const url1 = await uploadToImgBB(hq1);
+                if (url1) updateData.image1 = url1;
             }
             if (files[1]) {
-                const b2 = await compressAndEncodeImage(files[1]);
-                const u2 = await uploadToImgBB(b2);
-                if (u2) updateData.image2 = u2;
+                const hq2 = await compressAndEncodeImage(files[1], 1000, 0.8);
+                const url2 = await uploadToImgBB(hq2);
+                if (url2) updateData.image2 = url2;
             }
         }
 
@@ -204,6 +209,11 @@ window.saveProduct = async () => {
 
         showCustomAlert('تم حفظ المنتج بنجاح وتحديث المتجر!');
         switchTab('products');
+        document.getElementById('prod-id').value = '';
+        document.getElementById('prod-name').value = '';
+        document.getElementById('prod-desc').value = '';
+        document.getElementById('prod-price').value = '';
+        document.getElementById('prod-images').value = '';
     } catch (e) { showCustomAlert('خطأ في الحفظ'); console.error(e); }
     btn.innerHTML = 'حفظ المنتج <i class="fa-solid fa-save"></i>';
 };
@@ -215,8 +225,7 @@ window.loadProducts = async () => {
     list.innerHTML = '';
     snapshot.forEach(docSnap => {
         const data = docSnap.data();
-        // عرض أول صورة متوفرة في لوحة الإدارة
-        const imgSrc = data.image1 || data.image2 || (data.images && data.images.length > 0 ? data.images[0].data : '');
+        const imgSrc = (data.images && data.images.length > 0) ? data.images[0].data : (data.image1 || data.image || '');
         list.innerHTML += `<div class="card-3d"><img src="${imgSrc}"><div class="card-title">${data.name}</div><div style="color:#FF6B6B;">${data.price} د.ع</div><button class="btn-action edit" onclick="editProduct('${docSnap.id}', '${data.name}', '${data.category}', '${data.desc}', '${data.price}')">تعديل</button><button class="btn-action delete" onclick="deleteDocItem('products', '${docSnap.id}', null, loadProducts)">حذف</button></div>`;
     });
 };
@@ -231,7 +240,6 @@ window.editProduct = (id, name, cat, desc, price) => {
     window.scrollTo(0, 0);
 };
 
-// باقي وظائف النظام (الخصومات، العروض، البنرات، الطلبات)
 window.loadDiscountProducts = async () => {
     const selectList = document.getElementById('discount-products-select-list');
     const discountList = document.getElementById('discounted-products-list');
@@ -243,7 +251,7 @@ window.loadDiscountProducts = async () => {
     snapshot.forEach(docSnap => {
         const data = docSnap.data();
         allProducts.push({ id: docSnap.id, ...data });
-        const imgSrc = data.image1 || data.image2 || '';
+        const imgSrc = (data.images && data.images.length > 0) ? data.images[0].data : (data.image1 || '');
         if (!data.hasDiscount) {
             selectList.innerHTML += `<div class="card-3d" style="padding:10px;"><input type="checkbox" class="discount-checkbox" value="${docSnap.id}"><img src="${imgSrc}" style="height:80px;"><div style="font-size:0.9rem;">${data.name}</div></div>`;
         } else {
@@ -273,17 +281,19 @@ window.removeDiscount = async (id, originalPrice) => {
     loadDiscountProducts();
 };
 
+// حفظ العروض والبنرات بالنظام القديم (Base64) لضمان عملها بالمتجر
 window.saveOffer = async () => {
     const files = document.getElementById('offer-img').files;
     const btn = document.getElementById('btn-save-offer');
-    btn.innerText = 'جاري الرفع...';
-    for(let f of files) {
-        const b = await compressAndEncodeImage(f);
-        const url = await uploadToImgBB(b);
-        if(url) await addDoc(collection(db, "offers"), { image: url, createdAt: serverTimestamp() });
-    }
-    showCustomAlert('تم حفظ العروض');
-    loadOffers();
+    btn.innerText = 'جاري المعالجة...';
+    try {
+        for(let f of files) {
+            const base64Img = await compressAndEncodeImage(f, 800, 0.7);
+            await addDoc(collection(db, "offers"), { image: base64Img, createdAt: serverTimestamp() });
+        }
+        showCustomAlert('تم حفظ العروض');
+        loadOffers();
+    } catch(e) { showCustomAlert(e.message); }
     btn.innerHTML = 'حفظ العرض <i class="fa-solid fa-save"></i>';
 };
 
@@ -299,14 +309,15 @@ window.loadOffers = async () => {
 window.saveBanner = async () => {
     const files = document.getElementById('banner-img').files;
     const btn = document.getElementById('btn-save-banner');
-    btn.innerText = 'جاري الرفع...';
-    for(let f of files) {
-        const b = await compressAndEncodeImage(f);
-        const url = await uploadToImgBB(b);
-        if(url) await addDoc(collection(db, "banners"), { image: url, createdAt: serverTimestamp() });
-    }
-    showCustomAlert('تم حفظ البنرات');
-    loadBanners();
+    btn.innerText = 'جاري المعالجة...';
+    try {
+        for(let f of files) {
+            const base64Img = await compressAndEncodeImage(f, 800, 0.7);
+            await addDoc(collection(db, "banners"), { image: base64Img, createdAt: serverTimestamp() });
+        }
+        showCustomAlert('تم حفظ البنرات');
+        loadBanners();
+    } catch(e) { showCustomAlert(e.message); }
     btn.innerHTML = 'حفظ البنر <i class="fa-solid fa-save"></i>';
 };
 

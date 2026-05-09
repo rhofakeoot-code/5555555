@@ -16,7 +16,6 @@ const app = initializeApp(CONFIG.FIREBASE_CONFIG);
 const db = getFirestore(app);
 let allProducts = [];
 
-// دالة الإشعارات
 window.showCustomAlert = (message) => {
     const alertBox = document.createElement('div');
     alertBox.innerHTML = `<i class="fa-solid fa-circle-check" style="font-size: 1.5rem; margin-bottom: 5px;"></i><br>${message}`;
@@ -43,8 +42,8 @@ window.showCustomAlert = (message) => {
     }, 3000);
 };
 
-// دالة تقليص الصور (مرنة للتحكم بالحجم والجودة)
-async function compressAndEncodeImage(file, maxWidth = 800, quality = 0.7) {
+// ضغط الصورة قبل الرفع (لتقليل حجم الرفع لـ ImgBB فقط، لا تُحفظ في القاعدة)
+async function compressImage(file, maxWidth = 1000, quality = 0.8) {
     if (!file) return null;
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -60,21 +59,19 @@ async function compressAndEncodeImage(file, maxWidth = 800, quality = 0.7) {
                 canvas.height = img.height * scaleSize;
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-                const dataUrl = canvas.toDataURL('image/jpeg', quality);
-                resolve(dataUrl);
+                resolve(canvas.toDataURL('image/jpeg', quality));
             };
         };
         reader.onerror = error => reject(error);
     });
 }
 
-// دالة الرفع إلى ImgBB
+// الرفع إلى ImgBB وإرجاع الرابط
 async function uploadToImgBB(base64DataUrl) {
-    const IMGBB_API_KEY = "7fa910ddeffb3ce5937e0b4ff50246c8"; 
+    const IMGBB_API_KEY = "7fa910ddeffb3ce5937e0b4ff50246c8";
     const base64String = base64DataUrl.split(',')[1];
     const formData = new FormData();
     formData.append("image", base64String);
-
     try {
         const response = await fetch(`https://api.imgbb.com/1/upload?key=${IMGBB_API_KEY}`, {
             method: "POST",
@@ -86,6 +83,14 @@ async function uploadToImgBB(base64DataUrl) {
         console.error("ImgBB Error:", error);
         return null;
     }
+}
+
+// دالة موحدة: ضغط + رفع + إرجاع رابط فقط
+async function uploadImageGetUrl(file, maxWidth = 1000, quality = 0.8) {
+    const compressed = await compressImage(file, maxWidth, quality);
+    const url = await uploadToImgBB(compressed);
+    if (!url) throw new Error('فشل رفع الصورة إلى ImgBB');
+    return url;
 }
 
 window.verifyAdmin = () => {
@@ -117,19 +122,19 @@ window.switchTab = (tabId) => {
     if(tabId === 'sales') loadSales();
 };
 
-// حفظ الأقسام بالنظام القديم (Base64) لضمان عملها بالمتجر
+// === الأقسام: رابط ImgBB فقط ===
 window.saveCategory = async () => {
     const id = document.getElementById('cat-id').value;
     const name = document.getElementById('cat-name').value;
     const file = document.getElementById('cat-img').files[0];
     if (!name) return showCustomAlert('أدخل اسم القسم');
     const btn = document.getElementById('btn-save-cat');
-    btn.innerText = 'جاري المعالجة...';
+    btn.innerText = 'جاري الرفع...';
 
     try {
         let updateData = { name };
         if (file) {
-            updateData.image = await compressAndEncodeImage(file, 600, 0.7);
+            updateData.image = await uploadImageGetUrl(file, 600, 0.7);
         }
         if (id) await updateDoc(doc(db, "categories", id), updateData);
         else {
@@ -169,7 +174,7 @@ window.loadCategoriesForSelect = async () => {
     snapshot.forEach(docSnap => { select.innerHTML += `<option value="${docSnap.data().name}">${docSnap.data().name}</option>`; });
 };
 
-// حفظ المنتج (النظام الهجين الذكي: Base64 للرئيسية + ImgBB للتفاصيل)
+// === المنتجات: روابط ImgBB فقط (نفس أسماء الحقول) ===
 window.saveProduct = async () => {
     const id = document.getElementById('prod-id').value;
     const name = document.getElementById('prod-name').value;
@@ -180,41 +185,36 @@ window.saveProduct = async () => {
 
     if (!name || !price) return showCustomAlert('أكمل البيانات');
     const btn = document.getElementById('btn-save-prod');
-    btn.innerText = 'جاري الرفع والمعالجة...';
+    btn.innerText = 'جاري الرفع...';
 
     try {
         let updateData = { name, category: cat, desc, price: Number(price) };
-        
+
         if (files.length > 0) {
-            // 1. الصورة المصغرة لواجهة التطبيق الرئيسية (نص طويل بحجم خفيف جداً لتجنب الأبيض)
-            const thumbnailBase64 = await compressAndEncodeImage(files[0], 400, 0.5);
-            updateData.images = [{ id: 'img_' + Date.now(), data: thumbnailBase64 }];
-            updateData.image = thumbnailBase64; // احتياطي
-            
-            // 2. صور التفاصيل عالية الدقة مرفوعة على ImgBB
-            if (files[0]) {
-                const hq1 = await compressAndEncodeImage(files[0], 1000, 0.8);
-                const url1 = await uploadToImgBB(hq1);
-                if (url1) updateData.image1 = url1;
-            }
+            // الصورة الأساسية → رابط ImgBB
+            const url1 = await uploadImageGetUrl(files[0], 1000, 0.8);
+            updateData.images = [{ id: 'img_' + Date.now(), data: url1 }];
+            updateData.image = url1;
+            updateData.image1 = url1;
+
+            // الصورة الثانية إن وُجدت → رابط ImgBB
             if (files[1]) {
-                const hq2 = await compressAndEncodeImage(files[1], 1000, 0.8);
-                const url2 = await uploadToImgBB(hq2);
-                if (url2) updateData.image2 = url2;
+                const url2 = await uploadImageGetUrl(files[1], 1000, 0.8);
+                updateData.image2 = url2;
             }
         }
 
         if (id) await updateDoc(doc(db, "products", id), updateData);
         else await addDoc(collection(db, "products"), { ...updateData, createdAt: serverTimestamp() });
 
-        showCustomAlert('تم حفظ المنتج بنجاح وتحديث المتجر!');
+        showCustomAlert('تم حفظ المنتج بنجاح');
         switchTab('products');
         document.getElementById('prod-id').value = '';
         document.getElementById('prod-name').value = '';
         document.getElementById('prod-desc').value = '';
         document.getElementById('prod-price').value = '';
         document.getElementById('prod-images').value = '';
-    } catch (e) { showCustomAlert('خطأ في الحفظ'); console.error(e); }
+    } catch (e) { showCustomAlert(e.message || 'خطأ في الحفظ'); console.error(e); }
     btn.innerHTML = 'حفظ المنتج <i class="fa-solid fa-save"></i>';
 };
 
@@ -281,15 +281,15 @@ window.removeDiscount = async (id, originalPrice) => {
     loadDiscountProducts();
 };
 
-// حفظ العروض والبنرات بالنظام القديم (Base64) لضمان عملها بالمتجر
+// === العروض: رابط ImgBB فقط ===
 window.saveOffer = async () => {
     const files = document.getElementById('offer-img').files;
     const btn = document.getElementById('btn-save-offer');
-    btn.innerText = 'جاري المعالجة...';
+    btn.innerText = 'جاري الرفع...';
     try {
         for(let f of files) {
-            const base64Img = await compressAndEncodeImage(f, 800, 0.7);
-            await addDoc(collection(db, "offers"), { image: base64Img, createdAt: serverTimestamp() });
+            const url = await uploadImageGetUrl(f, 1200, 0.8);
+            await addDoc(collection(db, "offers"), { image: url, createdAt: serverTimestamp() });
         }
         showCustomAlert('تم حفظ العروض');
         loadOffers();
@@ -306,14 +306,15 @@ window.loadOffers = async () => {
     });
 };
 
+// === البنرات: رابط ImgBB فقط ===
 window.saveBanner = async () => {
     const files = document.getElementById('banner-img').files;
     const btn = document.getElementById('btn-save-banner');
-    btn.innerText = 'جاري المعالجة...';
+    btn.innerText = 'جاري الرفع...';
     try {
         for(let f of files) {
-            const base64Img = await compressAndEncodeImage(f, 800, 0.7);
-            await addDoc(collection(db, "banners"), { image: base64Img, createdAt: serverTimestamp() });
+            const url = await uploadImageGetUrl(f, 1200, 0.8);
+            await addDoc(collection(db, "banners"), { image: url, createdAt: serverTimestamp() });
         }
         showCustomAlert('تم حفظ البنرات');
         loadBanners();

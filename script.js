@@ -42,7 +42,6 @@ window.showCustomAlert = (message) => {
     }, 3000);
 };
 
-// ضغط الصورة قبل الرفع (لتقليل حجم الرفع لـ ImgBB فقط، لا تُحفظ في القاعدة)
 async function compressImage(file, maxWidth = 1000, quality = 0.8) {
     if (!file) return null;
     return new Promise((resolve, reject) => {
@@ -66,7 +65,6 @@ async function compressImage(file, maxWidth = 1000, quality = 0.8) {
     });
 }
 
-// الرفع إلى ImgBB وإرجاع الرابط
 async function uploadToImgBB(base64DataUrl) {
     const IMGBB_API_KEY = "7fa910ddeffb3ce5937e0b4ff50246c8";
     const base64String = base64DataUrl.split(',')[1];
@@ -85,7 +83,6 @@ async function uploadToImgBB(base64DataUrl) {
     }
 }
 
-// دالة موحدة: ضغط + رفع + إرجاع رابط فقط
 async function uploadImageGetUrl(file, maxWidth = 1000, quality = 0.8) {
     const compressed = await compressImage(file, maxWidth, quality);
     const url = await uploadToImgBB(compressed);
@@ -122,7 +119,7 @@ window.switchTab = (tabId) => {
     if(tabId === 'sales') loadSales();
 };
 
-// === الأقسام: رابط ImgBB فقط ===
+// === الأقسام: 400px / 70% ===
 window.saveCategory = async () => {
     const id = document.getElementById('cat-id').value;
     const name = document.getElementById('cat-name').value;
@@ -134,7 +131,7 @@ window.saveCategory = async () => {
     try {
         let updateData = { name };
         if (file) {
-            updateData.image = await uploadImageGetUrl(file, 600, 0.7);
+            updateData.image = await uploadImageGetUrl(file, 400, 0.7);
         }
         if (id) await updateDoc(doc(db, "categories", id), updateData);
         else {
@@ -174,7 +171,7 @@ window.loadCategoriesForSelect = async () => {
     snapshot.forEach(docSnap => { select.innerHTML += `<option value="${docSnap.data().name}">${docSnap.data().name}</option>`; });
 };
 
-// === المنتجات: روابط ImgBB فقط (نفس أسماء الحقول) ===
+// === المنتجات: 800px / 75% ===
 window.saveProduct = async () => {
     const id = document.getElementById('prod-id').value;
     const name = document.getElementById('prod-name').value;
@@ -191,15 +188,13 @@ window.saveProduct = async () => {
         let updateData = { name, category: cat, desc, price: Number(price) };
 
         if (files.length > 0) {
-            // الصورة الأساسية → رابط ImgBB
-            const url1 = await uploadImageGetUrl(files[0], 1000, 0.8);
+            const url1 = await uploadImageGetUrl(files[0], 800, 0.75);
             updateData.images = [{ id: 'img_' + Date.now(), data: url1 }];
             updateData.image = url1;
             updateData.image1 = url1;
 
-            // الصورة الثانية إن وُجدت → رابط ImgBB
             if (files[1]) {
-                const url2 = await uploadImageGetUrl(files[1], 1000, 0.8);
+                const url2 = await uploadImageGetUrl(files[1], 800, 0.75);
                 updateData.image2 = url2;
             }
         }
@@ -281,14 +276,14 @@ window.removeDiscount = async (id, originalPrice) => {
     loadDiscountProducts();
 };
 
-// === العروض: رابط ImgBB فقط ===
+// === العروض: 900px / 75% ===
 window.saveOffer = async () => {
     const files = document.getElementById('offer-img').files;
     const btn = document.getElementById('btn-save-offer');
     btn.innerText = 'جاري الرفع...';
     try {
         for(let f of files) {
-            const url = await uploadImageGetUrl(f, 1200, 0.8);
+            const url = await uploadImageGetUrl(f, 900, 0.75);
             await addDoc(collection(db, "offers"), { image: url, createdAt: serverTimestamp() });
         }
         showCustomAlert('تم حفظ العروض');
@@ -306,7 +301,7 @@ window.loadOffers = async () => {
     });
 };
 
-// === البنرات: رابط ImgBB فقط ===
+// === البنرات: 1200px / 80% (بدون تغيير) ===
 window.saveBanner = async () => {
     const files = document.getElementById('banner-img').files;
     const btn = document.getElementById('btn-save-banner');
